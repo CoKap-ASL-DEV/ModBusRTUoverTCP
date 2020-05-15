@@ -212,3 +212,17 @@ if __name__ == "__main__":
 		send_request(sunit, saddr, 1)
 
 	sys.exit(0)
+
+
+
+# read : moudbus_rw_test.py rw_mode sunit saddr scnt
+# read : moudbus_rw_test.py r 1 30007 20
+		
+
+# write : moudbus_rw_test.py w 1 40001 0xAADD
+
+
+# sunit -> unit -> unitid 1byte
+# scmd -> cmd -> Function Code 1byte
+# saddr -> addr -> starting Address 2byte
+# scnt -> cnt -> Quantity of Registers 2byte

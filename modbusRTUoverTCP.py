@@ -67,11 +67,19 @@ log = logging.getLogger()
 log.setLevel(logging.DEBUG)
 
 
-def set_modbus_request(unit, cmd, addr, cnt):
-	if addr > 10000:
-		addr = addr % 10000 - 1
-	# transaction identifier (2), protocol identifier (2), length (2), 
-	packet = struct.pack(">HHHBBHH", 0, 0, 6, unit, cmd, addr, cnt)   	
+def set_modbus_request(devAddr, fCode, sAddr, qnty):
+	if sAddr > 10000:
+		sAddr = sAddr % 10000 - 1
+		
+	##### RTU Protocol 형식 : Device Address(1) 1~247,    Fucntion Code(1),   Starting Address(2),   Quantity of input register(2),   crc(2)
+
+	#### SEND: 0x1 0x4 0x0 0x0 0x0 0x4
+	devAddr = 0x01
+	fCode = 0x04
+	sAddr = 0x0000
+	qnty = 0x04
+	crc = 0xf1c9
+	packet = struct.pack(">BBHHH", devAddr, fCode, sAddr, qnty, crc)   	
 	return packet
 	##length(2) 인데 BB 두개로 잡아놓은듯
 	###length => 6 -> unit(1), cmd(1), addr(2), cnt(2)
@@ -85,25 +93,26 @@ def usage(myname):
 	tlen = len(temp)
 	print("-----  usage  -----")
 	print("read : %s r 1 30007 20" % (temp[tlen - 1]))
+
 	print("write : %s w 1 40001 0xAADD" % (temp[tlen - 1]))
 	sys.exit(0)
 
-def send_request(sunit, saddr, scnt):
-	scmd = 4
-	if (saddr / 10000) == 3 :
-		scmd = 4
-	elif (saddr / 10000) == 4:
-		scmd = 3
+def send_request(devAddr, sAddr, qnty):
+	fCode = 4
+	# if (saddr / 10000) == 3 :
+	# 	scmd = 4
+	# elif (saddr / 10000) == 4:
+	# 	scmd = 3
 	### scmd -> cmd --> Function Code
 
-	print("send command : %d (%d)" % (scmd, saddr))
+	print("send command : %d (%d)" % (fCode, sAddr))
 
 	sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 	sock.connect(ADDR)
 
 
 #### sbuf 가 발송하는 패킷
-	sbuf = set_modbus_request(sunit, scmd, saddr, scnt)   #### sbuf 가 발송하는 패킷
+	sbuf = set_modbus_request(devAddr, fCode, sAddr, qnty)   #### sbuf 가 발송하는 패킷
 	print("Sended")
 	print(repr(sbuf))
 	sock.send(sbuf)
@@ -155,13 +164,19 @@ if __name__ == "__main__":
 		usage(sys.argv[0])
 	else:
 		rw_mode = sys.argv[1]   ## r : Read, w : Write 
-		sunit = int(sys.argv[2]) ## 
-		saddr = int(sys.argv[3])
+		devAddr = int(sys.argv[2]) ## 
+		sAddr = int(sys.argv[3])
 
 	scmd = 0
 
 	if ( rw_mode == "r" ):
-		scnt = int(sys.argv[4])
-		send_request(sunit, saddr, scnt)
+		qnty = int(sys.argv[4])
+		send_request(devAddr, sAddr, qnty)
 
 	sys.exit(0)
+
+
+##### RTU Protocol 형식 : Device Address(1) 1~247,    Fucntion Code(1),   Starting Address(2),   Quantity of input register(2),   crc(2)
+##### 시뮬레이터 활용 했을때의 송수신 데이터 및 CRC 데이터
+	#### SEND: 0x1 0x4 0x0 0x0 0x0 0x4                                0xf1 0xc9
+	#### RECV: 0x1 0x4 0x8 0x0 0x1 0x0 0x2 0x0 0x3 0x0 0x4            0xbc 0xce
