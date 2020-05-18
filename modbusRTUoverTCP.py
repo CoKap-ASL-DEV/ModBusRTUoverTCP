@@ -60,6 +60,7 @@ import sys
 import select
 import time
 import logging
+from crc162 import crc16
 FORMAT = ('%(asctime)-15s %(threadName)-15s '
           '%(levelname)-8s %(module)-15s:%(lineno)-8s %(message)s')
 logging.basicConfig(format=FORMAT)
@@ -76,10 +77,19 @@ def set_modbus_request(devAddr, fCode, sAddr, qnty):
 	#### SEND: 0x1 0x4 0x0 0x0 0x0 0x4
 	devAddr = 0x01
 	fCode = 0x04
-	sAddr = 0x0000
-	qnty = 0x04
-	crc = 0xf1c9
-	packet = struct.pack(">BBHHH", devAddr, fCode, sAddr, qnty, crc)   	
+	sAddr1 = sAddr>>16
+	sAddr2 = (sAddr & 0xff00) >>8
+	sAddr3 = (sAddr & 0xff)	
+	qnty = 0x07
+	#crc = 0xf1c9
+	crcInput = bytes([devAddr,fCode,sAddr1,sAddr2,sAddr3,qnty])
+	crcRes = crc16(crcInput)
+	crcFirstbytes = crcRes & 0xff
+	crcSecondbytes = crcRes>>8
+	
+	
+	packet = struct.pack(">BBHHBB", devAddr, fCode, sAddr, qnty, crcFirstbytes,crcSecondbytes)   	
+	#packet = struct.pack(">BBHHH", devAddr, fCode, sAddr, qnty, crc)   	
 	return packet
 	##length(2) 인데 BB 두개로 잡아놓은듯
 	###length => 6 -> unit(1), cmd(1), addr(2), cnt(2)
@@ -128,21 +138,50 @@ def send_request(devAddr, sAddr, qnty):
 	sock.close()
 	print("Recived")
 	print(repr(rbuf))
-
-	rsize = struct.unpack('>B', rbuf[5:6])[0]
-	runit = struct.unpack('>B', rbuf[6:7])[0]
-	rcmd = struct.unpack('>B', rbuf[7:8])[0]
-	rdsize = struct.unpack('>B', rbuf[8:9])[0]
-	buf_size = struct.calcsize(rbuf)
-	print("recv size : %d" % (rsize))
-	print("buf size : %d" % (len(rbuf)))
+	recv_devAddr = struct.unpack('>B', rbuf[0:1])[0]
+	recv_fcode = struct.unpack('>B', rbuf[1:2])[0]
+	recv_ByteCount = struct.unpack('>B', rbuf[2:3])[0]
+	Data1 = struct.unpack('>H', rbuf[3:5])[0]
+	Data2 = struct.unpack('>H', rbuf[5:7])[0]
+	Data3 = struct.unpack('>H', rbuf[7:9])[0]
+	Data4 = struct.unpack('>H', rbuf[9:11])[0]
+	Data5 = struct.unpack('>H', rbuf[11:13])[0]
+	Data6 = struct.unpack('>H', rbuf[13:15])[0]
+	Data7 = struct.unpack('>H', rbuf[15:17])[0]
+	
+	# runit = struct.unpack('>B', rbuf[6:7])[0]
+	# rcmd = struct.unpack('>B', rbuf[7:8])[0]
+	# rdsize = struct.unpack('>B', rbuf[8:9])[0]
+	# buf_size = struct.calcsize(rbuf)
+	print("recv_devAddr : %d" % (recv_devAddr))
+	print("recv_fcode : %d" % (recv_fcode))
+	print("recv_ByteCount : %d" % (recv_ByteCount))
+	print("Data1 : %d" % (Data1))
+	print("Data2 : %d" % (Data2))
+	print("Data3 : %d" % (Data3))
+	print("Data4 : %d" % (Data4))
+	print("Data5 : %d" % (Data5))
+	print("Data6 : %d" % (Data6))
+	print("Data7 : %d" % (Data7))
+	# print("buf size : %d" % (len(rbuf)))
 	#print ("[%d] recv size : %d, unit id : %d, cmd : %d, data size : %d" % (len(rbuf), rsize, runit, rcmd, rdsize))
 
-	for i in range(9, len(rbuf)):
+
+
+	
+	for i in range(3, int(recv_ByteCount)+3):
+		#print(i)
 		if ( i % 2) :
-			b = struct.unpack('>BB', rbuf[i:i+2])
-			ret = b[0] * 256 + b[1]
-			print("[%02d] %d (%02s)" % ((i - 9)/2 + 1, ret, hex(ret)))   ### ★★★★★ ret이 각 레지스터별 리턴 값
+			b = struct.unpack('>H', rbuf[i:i+2])[0]
+			print(b)
+			
+
+
+	# for i in range(3, int(recv_ByteCount/2)):
+	# 	if ( i % 2) :
+	# 		b = struct.unpack('>H', rbuf[i:i+2])
+	# 		ret = b[0] * 256 + b[1]
+	# 		print("[%02d] %d (%02s)" % ((i - 9)/2 + 1, ret, hex(ret)))   ### ★★★★★ ret이 각 레지스터별 리턴 값
 
 #
 
@@ -180,3 +219,6 @@ if __name__ == "__main__":
 ##### 시뮬레이터 활용 했을때의 송수신 데이터 및 CRC 데이터
 	#### SEND: 0x1 0x4 0x0 0x0 0x0 0x4                                0xf1 0xc9
 	#### RECV: 0x1 0x4 0x8 0x0 0x1 0x0 0x2 0x0 0x3 0x0 0x4            0xbc 0xce
+
+
+	### SEND : b'\x01\x04\x00\x00\x00\x04\xf1\xc9'
